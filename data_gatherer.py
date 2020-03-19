@@ -1,11 +1,11 @@
 import sys
-
+import os.path
 import numpy as np
 import gmplot
 import requests
 from progress.bar import IncrementalBar
 from matplotlib import pyplot
-
+import json
 
 class point:
     x = 0.0
@@ -140,8 +140,14 @@ pyplot.show()
 start_and_end_lat = [start.x / accuracy, end.x / accuracy]
 start_and_end_lon = [start.y / accuracy, end.y / accuracy]
 
+file = open("apiKey", "r")
+apiKey = file.read()
+file.close()
+
 gmap = gmplot.GoogleMapPlotter(min(start_and_end_lat), max(start_and_end_lon), 0)
 gmap.zoom = vector(start, end).len() / 2.25
+
+gmap.apikey = apiKey
 
 gmap.scatter(start_and_end_lat, start_and_end_lon, '#00FF00', size=500, marker=True)
 gmap.scatter(latitude_list, longitude_list, '#FF0000', size=500, marker=False)
@@ -151,9 +157,24 @@ gmap.draw("./map.htm")
 points_res.append(start.extend(1/accuracy))
 points_res.append(end.extend(1/accuracy))
 
-url_request = point_list_to_request(points_res) + "&key="
 
-response = requests.get(url_request)
-print(url_request)
+url_request = point_list_to_request(points_res) + "&key="+apiKey
 
-print(response.json())
+file.close()
+
+path = "responses/"+start_str+"_to_"+end_str+"_grid.json"
+
+if os.path.exists(path):
+    file = open(path, "r")
+    print("[INFO]: File found")
+    response = file.read()
+else:
+    file = open(path, "w+")
+    print("[INFO]: No File found starting request with the following URL:")
+    print(url_request)
+    response = requests.get(url_request).json()
+    file.write(str(response.get("results")))
+
+res_json = json.loads(response)
+for i in res_json:
+    print(i)
