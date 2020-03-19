@@ -6,6 +6,24 @@ import numpy as np
 import requests
 from matplotlib import pyplot
 
+class configuration:
+    start_str = ""
+    end_str = ""
+
+    start_point = ""
+    end_point = ""
+
+    accuracy = 0.0
+    alpha = 0.0
+
+    def __init__(self, cls_start_str="", cls_end_str=""):
+        self.start_str = cls_start_str
+        self.end_str = cls_end_str
+
+    def __str__(self):
+        out_str = "From " + string_dict.get(self.start_str) + " to " + string_dict.get(self.end_str)
+        out_str += " | accuracy = " + str(self.accuracy) + " alpha " + str(self.alpha)
+        return out_str
 
 class point:
     x = 0.0
@@ -113,6 +131,17 @@ def find_point(point_list, lat, lng, digit=4):
         return find_point(point_list, lat, lng, digit + 1)
 
 
+def filename_to_config(name):
+    args = name.split("_")
+    start_str = args[0]
+    end_str = args[1]
+    acc = args[2]
+    alph = args[3].split(".")[0]
+    con = configuration(start_str, end_str)
+    con.accuracy = float(acc)
+    con.alpha = float(alph)
+    return con
+
 coordinates_dict = {
     "golm": point(52.408492, 12.976237),
     "gns": point(52.393363, 13.130655),
@@ -143,90 +172,99 @@ int_dict = {
     7: "malgolo"
 }
 
-accuracy = 2 * 10 ** 2
-alpha = 30
+configurations = []
+
+for filename in os.listdir("./responses"):
+    configurations.append(filename_to_config(filename))
+
+print("")
 i = 1
-print("Saved locations:")
-for loc in string_dict:
-    print(str(i) + ". " + string_dict.get(loc))
+for conf in configurations:
+    print(str(i)+". "+str(conf))
     i += 1
+print(str(i)+". Create a new Configuration")
 
 while True:
-    starting_input = int(input("Choose starting point (" + str(1) + "-" + str(i) + "):"))
-    if starting_input >= 1 or starting_input <= i:
+    conf_select = int(input("Choose a previous configuration or create a new one(" + str(1) + "-" + str(i) + "):"))
+    if conf_select >= 1 or conf_select < i:
         break
     else:
         print("[ERROR] Selected Number is out of range")
+if i == conf_select:
+    config = configuration()
+    accuracy = 2 * 10 ** 2
+    alpha = 30
+    i = 1
+    print("Saved locations:")
+    for loc in string_dict:
+        print(str(i) + ". " + string_dict.get(loc))
+        i += 1
 
-start_str = int_dict.get(starting_input)
-print("You selected " + string_dict.get(start_str) + " as a starting position\n")
-print("Select one of the following Locations")
+    while True:
+        starting_input = int(input("Choose starting point (" + str(1) + "-" + str(i) + "):"))
+        if starting_input >= 1 or starting_input <= i:
+            break
+        else:
+            print("[ERROR] Selected Number is out of range")
 
-i = 1
-for loc in string_dict:
-    prt_str = str(i) + ". " + string_dict.get(loc)
-    if i == starting_input:
-        prt_str = "-------------"
-    print(prt_str)
-    i += 1
+    config.start_str = int_dict.get(starting_input)
+    print("You selected " + string_dict.get(config.start_str) + " as a starting position\n")
+    print("Select one of the following Locations")
 
-while True:
-    end_input = int(input("Choose an end point (" + str(1) + "-" + str(i) + "):"))
-    if (end_input >= 1 or end_input <= i) and end_input != starting_input:
-        break
-    else:
-        print("[ERROR] Selected Number is out of range or equal to the starting position")
+    i = 1
+    for loc in string_dict:
+        prt_str = str(i) + ". " + string_dict.get(loc)
+        if i == starting_input:
+            prt_str = "-------------"
+        print(prt_str)
+        i += 1
 
-end_str = int_dict.get(end_input)
-print("You selected " + string_dict.get(end_str) + " as a end position\n")
+    while True:
+        end_input = int(input("Choose an end point (" + str(1) + "-" + str(i) + "):"))
+        if (end_input >= 1 or end_input <= i) and end_input != starting_input:
+            break
+        else:
+            print("[ERROR] Selected Number is out of range or equal to the starting position")
+    config.end_str = int_dict.get(end_input)
+    print("You selected " + string_dict.get(config.end_str) + " as a end position\n")
 
-while True:
-    alpha = int(input("Choose an angle between 1° and 89°:"))
-    if alpha >= 1 and alpha <= 89:
-        break
-    else:
-        print("[ERROR] Selected Number is out of range\n")
+    while True:
+        alpha = int(input("Choose an angle between 1° and 89°:"))
+        if alpha >= 1 and alpha <= 89:
+            break
+        else:
+            print("[ERROR] Selected Number is out of range\n")
+    config.alpha = alpha
 
-while True:
-    accuracy = int(input("Choose an accuracy (the higher the number, the more accurate the result):"))
-    if accuracy >= 1:
-        break
-    else:
-        print("[ERROR] Selected Number must be greater than 0\n")
+    while True:
+        accuracy = int(input("Choose an accuracy (the higher the number, the more accurate the result):"))
+        if accuracy >= 1:
+            break
+        else:
+            print("[ERROR] Selected Number must be greater than 0\n")
+
+    config.accuracy = accuracy
+else:
+    config = configurations[conf_select-1]
 
 print("___")
-print("Finding path from " + string_dict.get(start_str) + " to " + string_dict.get(end_str) + "...")
+print("Finding path from " + string_dict.get(config.start_str) + " to " + string_dict.get(config.end_str) + "...")
 
-start = coordinates_dict.get(start_str).extend(accuracy)
-end = coordinates_dict.get(end_str).extend(accuracy)
+start = coordinates_dict.get(config.start_str).extend(config.accuracy)
+end = coordinates_dict.get(config.end_str).extend(config.accuracy)
 
 points = []
 
-print("Creating a regular grid with the accuracy " + str(accuracy) + " and an inclination of " + str(alpha) + "°...")
-latitude_list, longitude_list, points_res = regGrid(alpha, start, end, accuracy)
+print("Creating a regular grid with the accuracy " + str(config.accuracy) + " and an inclination of " + str(config.alpha) + "°...")
+latitude_list, longitude_list, points_res = regGrid(config.alpha, start, end, config.accuracy)
 X, Y = [], []
 
 end.id = (int(vector(start, end).len()), 0)
 plot_relative_grid = True
 
-if plot_relative_grid:
-    print("Plotting regular grid...")
-    X.append(start.id[0])
-    X.append(end.id[0])
-    Y.append(start.id[1])
-    Y.append((end.id[1]))
 
-    for point_tmp in points_res:
-        X.append(point_tmp.id[0])
-        Y.append(point_tmp.id[1])
-
-    fig, ax = pyplot.subplots()
-    ax.scatter(X, Y)
-
-    pyplot.show()
-
-start_and_end_lat = [start.x / accuracy, end.x / accuracy]
-start_and_end_lon = [start.y / accuracy, end.y / accuracy]
+start_and_end_lat = [start.x / config.accuracy, end.x / config.accuracy]
+start_and_end_lon = [start.y / config.accuracy, end.y / config.accuracy]
 
 file = open("apiKey", "r")
 apiKey = file.read()
@@ -244,14 +282,14 @@ print("Drawing initial Map...")
 
 gmap.draw("./map.htm")
 
-points_res.append(start.extend(1 / accuracy))
-points_res.append(end.extend(1 / accuracy))
+points_res.append(start.extend(1 / config.accuracy))
+points_res.append(end.extend(1 / config.accuracy))
 
 url_request = point_list_to_request(points_res) + "&key=" + apiKey
 
 file.close()
 
-path = "responses/" + start_str + "_to_" + end_str + "_grid_acc:" + str(accuracy) + "_alpha:" + str(alpha) + ".json"
+path = "responses/" + config.start_str + "_" + config.end_str + "_" + str(config.accuracy) + "_" + str(config.alpha) + ".json"
 
 if os.path.exists(path):
     file = open(path, "r")
@@ -276,6 +314,24 @@ for i in response:
     tmp_point.height = i.get("elevation")
     facts.append(tmp_point)
 file = open("asp/input.lp", "w+")
+X = []
+Y = []
+c = []
+
 for fact in facts:
     file.write(fact.to_fact_str() + "\n")
+    if plot_relative_grid:
+        X.append(fact.id[0])
+
+        Y.append(fact.id[1])
+        c.append(fact.height)
+
+if plot_relative_grid:
+    fig, ax = pyplot.subplots()
+    res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
+    cbar = pyplot.colorbar(res)
+    pyplot.clabel = "Grid from " + config.start_str
+    pyplot.show()
 file.close()
+
+
