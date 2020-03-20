@@ -6,6 +6,7 @@ import numpy as np
 import requests
 from matplotlib import pyplot
 
+
 class configuration:
     start_str = ""
     end_str = ""
@@ -24,6 +25,7 @@ class configuration:
         out_str = "From " + string_dict.get(self.start_str) + " to " + string_dict.get(self.end_str)
         out_str += " | accuracy = " + str(self.accuracy) + " alpha " + str(self.alpha)
         return out_str
+
 
 class point:
     x = 0.0
@@ -47,7 +49,7 @@ class point:
         return point((self.x * factor), (self.y * factor), self.id[0], self.id[1])
 
     def to_fact_str(self):
-        return "point(" + str(self.id[0]) + "," + str(self.id[1]) + "," + str(self.height) + ")."
+        return "point(" + str(self.id[0]) + "," + str(self.id[1]) + "," + str(int(self.height*100)) + ")."
 
 
 class vector:
@@ -95,7 +97,7 @@ def regGrid(alpha, start, end, accuracy):
             beta = np.arctan(r / d)
             vec_se_rot = vec_se_for_d.rotate(beta)
             vec_se_extend = vec_se_rot.extend(np.sqrt(d ** 2 + r ** 2) / d)
-            point_d = vec_se_extend.to_point(start, (d, r))
+            point_d = vec_se_extend.to_point(start, (int(d), r))
             X.append(point_d.x / accuracy)
             Y.append(point_d.y / accuracy)
             points.append(point_d.extend(1 / accuracy))
@@ -142,12 +144,12 @@ def filename_to_config(name):
     con.alpha = float(alph)
     return con
 
+
 coordinates_dict = {
     "golm": point(52.408492, 12.976237),
     "gns": point(52.393363, 13.130655),
     "ehst": point(52.147293, 14.658077),
     "fstw": point(52.366553, 14.060773),
-    "wlgt": point(-41.326396, 174.836648),
     "stAnton": point(47.125953, 10.262627),
     "malgolo": point(46.377417, 11.095031)
 }
@@ -157,7 +159,6 @@ string_dict = {
     "gns": "Griebnitzsee",
     "ehst": "Eisenhüttenstadt",
     "fstw": "Fürstenwalde",
-    "wlgt": "Wellington",
     "stAnton": "St. Anton",
     "malgolo": "Malgolo"
 }
@@ -167,7 +168,6 @@ int_dict = {
     2: "gns",
     3: "ehst",
     4: "fstw",
-    5: "wlgt",
     6: "stAnton",
     7: "malgolo"
 }
@@ -180,9 +180,9 @@ for filename in os.listdir("./responses"):
 print("")
 i = 1
 for conf in configurations:
-    print(str(i)+". "+str(conf))
+    print(str(i) + ". " + str(conf))
     i += 1
-print(str(i)+". Create a new Configuration")
+print(str(i) + ". Create a new Configuration")
 
 while True:
     conf_select = int(input("Choose a previous configuration or create a new one(" + str(1) + "-" + str(i) + "):"))
@@ -245,7 +245,7 @@ if i == conf_select:
 
     config.accuracy = accuracy
 else:
-    config = configurations[conf_select-1]
+    config = configurations[conf_select - 1]
 
 print("___")
 print("Finding path from " + string_dict.get(config.start_str) + " to " + string_dict.get(config.end_str) + "...")
@@ -255,13 +255,12 @@ end = coordinates_dict.get(config.end_str).extend(config.accuracy)
 
 points = []
 
-print("Creating a regular grid with the accuracy " + str(config.accuracy) + " and an inclination of " + str(config.alpha) + "°...")
+print("Creating a regular grid with the accuracy " + str(config.accuracy) + " and an inclination of " + str(
+    config.alpha) + "°...")
 latitude_list, longitude_list, points_res = regGrid(config.alpha, start, end, config.accuracy)
-X, Y = [], []
 
 end.id = (int(vector(start, end).len()), 0)
 plot_relative_grid = True
-
 
 start_and_end_lat = [start.x / config.accuracy, end.x / config.accuracy]
 start_and_end_lon = [start.y / config.accuracy, end.y / config.accuracy]
@@ -280,7 +279,7 @@ gmap.scatter(latitude_list, longitude_list, '#FF0000', size=100, marker=False)
 
 print("Drawing initial Map...")
 
-gmap.draw("./map.htm")
+gmap.draw("./output/map.htm")
 
 points_res.append(start.extend(1 / config.accuracy))
 points_res.append(end.extend(1 / config.accuracy))
@@ -288,8 +287,9 @@ points_res.append(end.extend(1 / config.accuracy))
 url_request = point_list_to_request(points_res) + "&key=" + apiKey
 
 file.close()
-
-path = "responses/" + config.start_str + "_" + config.end_str + "_" + str(config.accuracy) + "_" + str(config.alpha) + ".json"
+# --------------------
+# File Check / query
+path = "responses/" + config.start_str + "_" + config.end_str + "_" + str(int(config.accuracy)) + "_" + str(int(config.alpha)) + ".json"
 
 if os.path.exists(path):
     file = open(path, "r")
@@ -314,17 +314,21 @@ for i in response:
     tmp_point.height = i.get("elevation")
     facts.append(tmp_point)
 file = open("asp/input.lp", "w+")
+# ------------------
+# Plotting
 X = []
 Y = []
 c = []
 
-for fact in facts:
+for fact in facts[:-2]:
     file.write(fact.to_fact_str() + "\n")
     if plot_relative_grid:
         X.append(fact.id[0])
-
         Y.append(fact.id[1])
         c.append(fact.height)
+
+file.write("start(" + str(int(facts[-2].id[0])) + "," + str(facts[-2].id[1]) + "," + str(int(facts[-2].height*100)) + ")." + "\n")
+file.write("start(" + str(int(facts[-1].id[0])) + "," + str(facts[-1].id[1]) + "," + str(int(facts[-1].height*100)) + ")." + "\n")
 
 if plot_relative_grid:
     fig, ax = pyplot.subplots()
@@ -333,5 +337,3 @@ if plot_relative_grid:
     pyplot.clabel = "Grid from " + config.start_str
     pyplot.show()
 file.close()
-
-

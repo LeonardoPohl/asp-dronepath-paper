@@ -1,2 +1,4 @@
-apiKey
-*.json
+/apiKey
+/*.json
+/*.htm
+/output
