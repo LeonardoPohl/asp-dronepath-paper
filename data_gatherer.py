@@ -1,10 +1,10 @@
 import json
 import os.path
-
+import re
 import gmplot
 import numpy as np
 import requests
-from matplotlib import pyplot
+from matplotlib import pyplot as plt
 
 
 class configuration:
@@ -34,10 +34,11 @@ class point:
     id = (0.0, 0.0)
     height = 0.0
 
-    def __init__(self, x, y, x_rel=0, y_rel=0):
+    def __init__(self, x=0.0, y=0.0, x_rel=0, y_rel=0, height=0):
         self.x = x
         self.y = y
         self.id = (x_rel, y_rel)
+        self.height = 0
 
     def to_vec(self, end_point):
         return vector(end_point.x - self.x, end_point.y - self.y)
@@ -49,7 +50,7 @@ class point:
         return point((self.x * factor), (self.y * factor), self.id[0], self.id[1])
 
     def to_fact_str(self):
-        return "point(" + str(self.id[0]) + "," + str(self.id[1]) + "," + str(int(self.height*100)) + ")."
+        return "point(" + str(self.id[0]) + "," + str(self.id[1]) + "," + str(int(self.height)) + ")."
 
 
 class vector:
@@ -78,17 +79,13 @@ class vector:
         return vector(point(0, 0), point(x_2, y_2))
 
 
-def regGrid(alpha, start, end, accuracy):
+def reg_grid(alpha, start, end, accuracy):
     vec_se = vector(start, end)  # SE
     X = []
     Y = []
     points = []
     fac, fac_old = 0, 0
     for d in np.arange(vec_se.len()):
-        fac = int(10000 * d / vec_se.len()) / 100
-        if (fac - fac_old > 1):
-            fac_old = fac
-            print(str(fac) + " \t100.00", end="%s\r")
         vec_se_for_d = vec_se.extend(d / vec_se.len())  # SE'
         k = d if d < vec_se.len() / 2 else vec_se.len() - d
         r_max_d = np.ceil(get_r(alpha, k))
@@ -116,7 +113,7 @@ def get_r(alpha_tmp, d):
     return np.tan(np.deg2rad(alpha_tmp)) * d
 
 
-def find_point(point_list, lat, lng, digit=4):
+def find_point_exact(point_list, lat, lng, digit=4):
     global found_point
     count = 0
 
@@ -128,9 +125,17 @@ def find_point(point_list, lat, lng, digit=4):
     if (count == 1):
         return found_point
     elif (count == 0):
-        return find_point(point_list, lat, lng, digit - 1)
+        return find_point_exact(point_list, lat, lng, digit - 1)
     else:
-        return find_point(point_list, lat, lng, digit + 1)
+        return find_point_exact(point_list, lat, lng, digit + 1)
+
+
+def find_point_rel(point_list, x_rel, y_rel):
+    for itr_point in point_list:
+        if itr_point.id[0] == x_rel and itr_point.id[1] == y_rel:
+            #found_point = itr_point
+            break
+    return itr_point
 
 
 def filename_to_config(name):
@@ -145,13 +150,172 @@ def filename_to_config(name):
     return con
 
 
+def pl_to_vl(point_list):
+    path = np.array([[i.id, j.id] for i,j in point_list])
+    ordered = path[np.newaxis, 0]
+    for i in range(len(path) - 1):
+        j = np.argwhere(np.all(ordered[i, 1, :] == path[:, 0, :], axis=1))
+        ordered = np.append(ordered, path[np.newaxis, np.squeeze(j)], axis=0)
+
+    b = np.append(ordered[:, 0], ordered[-1, [1]], axis=0)
+    return b
+
+
+def main(chosen_config):
+
+    print("___")
+    print("Finding path from " + string_dict.get(chosen_config.start_str) + " to " + string_dict.get(chosen_config.end_str) + "...")
+
+    start = coordinates_dict.get(chosen_config.start_str).extend(chosen_config.accuracy)
+    end = coordinates_dict.get(chosen_config.end_str).extend(chosen_config.accuracy)
+
+    points = []
+
+    print("Creating a regular grid with the accuracy " + str(chosen_config.accuracy) + " and an inclination of " + str(
+        chosen_config.alpha) + "°...")
+    latitude_list, longitude_list, points_res = reg_grid(chosen_config.alpha, start, end, chosen_config.accuracy)
+
+    end.id = (int(vector(start, end).len()), 0)
+    plot_relative_grid = True
+
+    start_and_end_lat = [start.x / chosen_config.accuracy, end.x / chosen_config.accuracy]
+    start_and_end_lon = [start.y / chosen_config.accuracy, end.y / chosen_config.accuracy]
+
+    file = open("apiKey", "r")
+    apiKey = file.read()
+    file.close()
+
+    gmap = gmplot.GoogleMapPlotter(min(start_and_end_lat), max(start_and_end_lon), 0)
+    gmap.zoom = vector(start, end).len() / 2.25
+
+    gmap.apikey = apiKey
+
+    gmap.scatter(start_and_end_lat, start_and_end_lon, '#00FF00', size=100, marker=True)
+    gmap.scatter(latitude_list, longitude_list, '#FF0000', size=100, marker=False)
+
+    print("Drawing initial Map...")
+
+    gmap.draw("./output/map.htm")
+
+    points_res.append(start.extend(1 / chosen_config.accuracy))
+    points_res.append(end.extend(1 / chosen_config.accuracy))
+
+    url_request = point_list_to_request(points_res) + "&key=" + apiKey
+
+    file.close()
+    # --------------------
+    # File Check / query
+    path = "responses/" + chosen_config.start_str + "_" + chosen_config.end_str + "_" + str(int(chosen_config.accuracy)) + "_" + str(int(chosen_config.alpha)) + ".json"
+
+    if os.path.exists(path):
+        file = open(path, "r")
+        print("The grid was already requested, file will be used...")
+        response = []
+        for line in file:
+            response.append(json.loads(line.strip()))
+    else:
+        print("No File found starting request with the following URL:")
+        print(url_request)
+        response = requests.get(url_request).json().get("results")
+        file = open(path, "w+")
+        for s in response:
+            file.write(str(s).replace("'", "\"") + "\n")
+        file.close()
+
+    facts = []
+    print("Creating ASP facts...")
+    for i in response:
+        location = i.get("location")
+
+        tmp_point = find_point_exact(points_res, location.get("lat"), location.get("lng"))
+        tmp_point.height = i.get("elevation")
+        facts.append(tmp_point)
+    # ------------------
+    # Plotting
+    X = []
+    Y = []
+    c = []
+
+    print("Is the outputfile already created [y/n]?")
+
+
+    while True:
+        output_generated = str(input("Choice:"))
+        if output_generated == "y" or output_generated == "yes":
+            output_generated = True
+            break
+        elif output_generated == "n" or output_generated == "no":
+            output_generated = False
+            file = open("asp/input.lp", "w+")
+            break
+        else:
+            print("[ERROR] Selected Value is not an option")
+
+    for fact in facts:
+        if not output_generated:
+            file.write(fact.to_fact_str() + "\n")
+        if plot_relative_grid:
+            X.append(22-fact.id[0])
+            Y.append(-1*fact.id[1])
+            c.append(fact.height)
+
+    if not output_generated:
+        file.write("start(point(" + str(int(facts[-2].id[0])) + "," + str(facts[-2].id[1]) + "," + str(int(facts[-2].height)) + "))." + "\n")
+        file.write("end(point(" + str(int(facts[-1].id[0])) + "," + str(facts[-1].id[1]) + "," + str(int(facts[-1].height)) + "))." + "\n")
+        file.close()
+
+    else:
+        file = open("asp/output.lp", "r")
+        content = file.read().split(" ")
+
+        point_list = []
+
+        for path_seq in content:
+            point_a = re.search('point\((.*)\),', path_seq).group(1).split(",")
+            point_b = re.search(',point\((.*)\)\)', path_seq).group(1).split(",")
+            point_tmp_a = find_point_rel(facts, int(point_a[0]), int(point_a[1]))
+            point_tmp_b = find_point_rel(facts, int(point_b[0]), int(point_b[1]))
+            point_list.append((point_tmp_a, point_tmp_b))
+
+        for pt in point_list:
+            print(pt[0].to_fact_str())
+        vertex_list = pl_to_vl(point_list)
+
+        X_path = []
+        Y_path = []
+        for vert in vertex_list:
+            tmp_pt = find_point_rel(facts, int(vert[0]), int(vert[1]))
+            X_path.append(tmp_pt.x)
+            Y_path.append(tmp_pt.y)
+
+        if plot_relative_grid:
+            fig, ax = plt.subplots()
+            res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
+            plt.colorbar(res, label="Height in m")
+
+            ax.plot(*vertex_list.T)
+            plt.axis('equal')
+            plt.clabel = "Grid from " + chosen_config.start_str
+            plt.show()
+
+        gmap.apikey = apiKey
+
+        gmap.scatter(start_and_end_lat, start_and_end_lon, '#00FF00', size=100, marker=True)
+        gmap.scatter(latitude_list, longitude_list, '#FF0000', size=100, marker=False)
+        gmap.plot(X_path, Y_path, '#000000')
+        print("Drawing Map with a path...")
+
+        gmap.draw("./output/map_w_line.htm")
+
+
 coordinates_dict = {
     "golm": point(52.408492, 12.976237),
     "gns": point(52.393363, 13.130655),
     "ehst": point(52.147293, 14.658077),
     "fstw": point(52.366553, 14.060773),
     "stAnton": point(47.125953, 10.262627),
-    "malgolo": point(46.377417, 11.095031)
+    "malgolo": point(46.377417, 11.095031),
+    "gsp": point(47.485756, 11.094934)
 }
 
 string_dict = {
@@ -159,8 +323,9 @@ string_dict = {
     "gns": "Griebnitzsee",
     "ehst": "Eisenhüttenstadt",
     "fstw": "Fürstenwalde",
-    "stAnton": "St. Anton",
-    "malgolo": "Malgolo"
+    "stAnton": "St.Anton",
+    "malgolo": "Malgolo",
+    "gsp": "Garmisch Partenkirchen"
 }
 
 int_dict = {
@@ -168,8 +333,9 @@ int_dict = {
     2: "gns",
     3: "ehst",
     4: "fstw",
-    6: "stAnton",
-    7: "malgolo"
+    5: "stAnton",
+    6: "malgolo",
+    7: "gsp"
 }
 
 configurations = []
@@ -192,16 +358,17 @@ while True:
         print("[ERROR] Selected Number is out of range")
 if i == conf_select:
     config = configuration()
-    accuracy = 2 * 10 ** 2
-    alpha = 30
     i = 1
     print("Saved locations:")
     for loc in string_dict:
         print(str(i) + ". " + string_dict.get(loc))
         i += 1
 
+    # -------------------------
+    # Input of the starting point
+    # -------------------------
     while True:
-        starting_input = int(input("Choose starting point (" + str(1) + "-" + str(i) + "):"))
+        starting_input = int(input("Choose starting point (" + str(1) + "-" + str(i - 1) + "):"))
         if starting_input >= 1 or starting_input <= i:
             break
         else:
@@ -219,6 +386,9 @@ if i == conf_select:
         print(prt_str)
         i += 1
 
+    # -------------------------
+    # Input of End point
+    # -------------------------
     while True:
         end_input = int(input("Choose an end point (" + str(1) + "-" + str(i) + "):"))
         if (end_input >= 1 or end_input <= i) and end_input != starting_input:
@@ -227,7 +397,10 @@ if i == conf_select:
             print("[ERROR] Selected Number is out of range or equal to the starting position")
     config.end_str = int_dict.get(end_input)
     print("You selected " + string_dict.get(config.end_str) + " as a end position\n")
+    # -------------------------
 
+    # Input of Angle
+    # -------------------------
     while True:
         alpha = int(input("Choose an angle between 1° and 89°:"))
         if alpha >= 1 and alpha <= 89:
@@ -235,7 +408,10 @@ if i == conf_select:
         else:
             print("[ERROR] Selected Number is out of range\n")
     config.alpha = alpha
+    # -------------------------
 
+    # Input of Accuracy
+    # -------------------------
     while True:
         accuracy = int(input("Choose an accuracy (the higher the number, the more accurate the result):"))
         if accuracy >= 1:
@@ -244,96 +420,9 @@ if i == conf_select:
             print("[ERROR] Selected Number must be greater than 0\n")
 
     config.accuracy = accuracy
+    # -------------------------
+
 else:
     config = configurations[conf_select - 1]
 
-print("___")
-print("Finding path from " + string_dict.get(config.start_str) + " to " + string_dict.get(config.end_str) + "...")
-
-start = coordinates_dict.get(config.start_str).extend(config.accuracy)
-end = coordinates_dict.get(config.end_str).extend(config.accuracy)
-
-points = []
-
-print("Creating a regular grid with the accuracy " + str(config.accuracy) + " and an inclination of " + str(
-    config.alpha) + "°...")
-latitude_list, longitude_list, points_res = regGrid(config.alpha, start, end, config.accuracy)
-
-end.id = (int(vector(start, end).len()), 0)
-plot_relative_grid = True
-
-start_and_end_lat = [start.x / config.accuracy, end.x / config.accuracy]
-start_and_end_lon = [start.y / config.accuracy, end.y / config.accuracy]
-
-file = open("apiKey", "r")
-apiKey = file.read()
-file.close()
-
-gmap = gmplot.GoogleMapPlotter(min(start_and_end_lat), max(start_and_end_lon), 0)
-gmap.zoom = vector(start, end).len() / 2.25
-
-gmap.apikey = apiKey
-
-gmap.scatter(start_and_end_lat, start_and_end_lon, '#00FF00', size=100, marker=True)
-gmap.scatter(latitude_list, longitude_list, '#FF0000', size=100, marker=False)
-
-print("Drawing initial Map...")
-
-gmap.draw("./output/map.htm")
-
-points_res.append(start.extend(1 / config.accuracy))
-points_res.append(end.extend(1 / config.accuracy))
-
-url_request = point_list_to_request(points_res) + "&key=" + apiKey
-
-file.close()
-# --------------------
-# File Check / query
-path = "responses/" + config.start_str + "_" + config.end_str + "_" + str(int(config.accuracy)) + "_" + str(int(config.alpha)) + ".json"
-
-if os.path.exists(path):
-    file = open(path, "r")
-    print("The grid was already requested, file will be used...")
-    response = []
-    for line in file:
-        response.append(json.loads(line.strip()))
-else:
-    print("No File found starting request with the following URL:")
-    print(url_request)
-    response = requests.get(url_request).json().get("results")
-    file = open(path, "w+")
-    for s in response:
-        file.write(str(s).replace("'", "\"") + "\n")
-    file.close()
-
-facts = []
-print("Creating ASP facts...")
-for i in response:
-    location = i.get("location")
-    tmp_point = find_point(points_res, location.get("lat"), location.get("lng"))
-    tmp_point.height = i.get("elevation")
-    facts.append(tmp_point)
-file = open("asp/input.lp", "w+")
-# ------------------
-# Plotting
-X = []
-Y = []
-c = []
-
-for fact in facts[:-2]:
-    file.write(fact.to_fact_str() + "\n")
-    if plot_relative_grid:
-        X.append(fact.id[0])
-        Y.append(fact.id[1])
-        c.append(fact.height)
-
-file.write("start(" + str(int(facts[-2].id[0])) + "," + str(facts[-2].id[1]) + "," + str(int(facts[-2].height*100)) + ")." + "\n")
-file.write("start(" + str(int(facts[-1].id[0])) + "," + str(facts[-1].id[1]) + "," + str(int(facts[-1].height*100)) + ")." + "\n")
-
-if plot_relative_grid:
-    fig, ax = pyplot.subplots()
-    res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
-    cbar = pyplot.colorbar(res)
-    pyplot.clabel = "Grid from " + config.start_str
-    pyplot.show()
-file.close()
+main(config)
