@@ -255,8 +255,8 @@ def main(chosen_config):
         if not output_generated:
             file.write(fact.to_fact_str() + "\n")
         if plot_relative_grid:
-            X.append(22-fact.id[0])
-            Y.append(-1*fact.id[1])
+            X.append(fact.id[0])
+            Y.append(fact.id[1])
             c.append(fact.height)
 
     if not output_generated:
@@ -295,7 +295,6 @@ def main(chosen_config):
 
             ax.plot(*vertex_list.T)
             plt.axis('equal')
-            plt.clabel = "Grid from " + chosen_config.start_str
             plt.show()
 
         gmap.apikey = apiKey
