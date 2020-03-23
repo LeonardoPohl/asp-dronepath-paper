@@ -283,18 +283,24 @@ def main(chosen_config):
 
         X_path = []
         Y_path = []
+        x_ses = []
+        heights = []
+        i = 0
         for vert in vertex_list:
             tmp_pt = find_point_rel(facts, int(vert[0]), int(vert[1]))
+            x_ses.append(i)
+            i += 1
+            heights.append(tmp_pt.height)
             X_path.append(tmp_pt.x)
             Y_path.append(tmp_pt.y)
 
         if plot_relative_grid:
             fig, ax = plt.subplots()
-            res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
-            plt.colorbar(res, label="Height in m")
-
-            ax.plot(*vertex_list.T)
-            plt.axis('equal')
+            ax.plot(x_ses, heights)
+            #res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
+            #plt.colorbar(res, label="Height in m")
+            #ax.plot(*vertex_list.T)
+            #plt.axis('equal')
             plt.show()
 
         gmap.apikey = apiKey

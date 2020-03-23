@@ -9,13 +9,15 @@ isPoint(point(X, Y, Z)) :- point(X, Y, Z).
 % Point Constraints
 
 % Each path can only lead to a neightbour
-:- path(point(X1, Y1, _), point(X2, Y2, _)), |X1 - X2| + |Y1 - Y2| > 1.
+:- path(point(X1, Y1, _), point(X2, Y2, _)), |X1 - X2| + |Y1 - Y2| <> 1.
 
 % A path cannot lead to the same place
-:- path(point(X, Y, _), point(X, Y, _)).
+%:- path(point(X, Y, _), point(X, Y, _)).
 
 % Each path can only lead forward
 :- path(point(X1, Y1, _), point(X2, Y2, _)), X2 - X1 < 0.
+
+:- path(point(X1, Y1, _), point(X2, Y2, _)), path(point(X2, Y2, _), point(X1, Y1, _)).
 
 %------------------------
 % Path Constraints
@@ -43,10 +45,10 @@ connected(B) :- connected(A), path(A, B).
 % Minimization
 
 % Minimize the number of used paths (find minimal amount of needed moves to reach goal)
-#minimize {1, A, B : path(A, B)}.
+%#minimize {1, A, B : path(A, B)}.
 
 % Minimize hight delta |H1-H2| for the chosen paths
-#minimize {|H1-H2|, X1, Y1, X2, Y2 : path(point(X1, Y1, H1), point(X2, Y2, H2))}.
+#minimize {|H2-1-H1|, X1, Y1, X2, Y2 : path(point(X1, Y1, H1), point(X2, Y2, H2))}.
 
 %------------------------
 % Output
