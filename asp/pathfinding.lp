@@ -19,6 +19,12 @@ isPoint(point(X, Y, Z)) :- point(X, Y, Z).
 
 :- path(point(X1, Y1, _), point(X2, Y2, _)), path(point(X2, Y2, _), point(X1, Y1, _)).
 
+% This is only necessary for performance and midway solutions
+:- path(point(_, _, _), point(X, Y, _)),
+    path(point(X, Y, _), point(X1, Y1, _)),  path(point(X, Y, _), point(X2, Y2, _)),
+    |X1 - X2| + |Y1 - Y2| > 0.
+:- path(point(X1, Y1, _), point(X, Y, _)), path(point(X2, Y2, _), point(X, Y, _)),  |X1 - X2| + |Y1 - Y2| > 0.
+
 %------------------------
 % Path Constraints
 
@@ -39,16 +45,14 @@ connected(A) :- start(A).
 connected(B) :- connected(A), path(A, B).
 
 % Every path has to be connected to the start
-:- path(A, B), not connected(B), not connected(A).
+:- path(A, B), not connected(A).
+:- path(A, B), not connected(B).
 
 %------------------------
 % Minimization
 
-% Minimize the number of used paths (find minimal amount of needed moves to reach goal)
-%#minimize {1, A, B : path(A, B)}.
-
 % Minimize hight delta |H1-H2| for the chosen paths
-#minimize {|H2-1-H1|, X1, Y1, X2, Y2 : path(point(X1, Y1, H1), point(X2, Y2, H2))}.
+#minimize {|H2-H1| + 1, X1, Y1, X2, Y2 : path(point(X1, Y1, H1), point(X2, Y2, H2))}.
 
 %------------------------
 % Output

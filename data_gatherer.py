@@ -5,6 +5,7 @@ import gmplot
 import numpy as np
 import requests
 from matplotlib import pyplot as plt
+from scipy.interpolate import make_interp_spline, BSpline
 
 
 class configuration:
@@ -277,30 +278,37 @@ def main(chosen_config):
             point_tmp_b = find_point_rel(facts, int(point_b[0]), int(point_b[1]))
             point_list.append((point_tmp_a, point_tmp_b))
 
-        for pt in point_list:
-            print(pt[0].to_fact_str())
+        #for pt in point_list:
+        #    print(pt[0].to_fact_str())
         vertex_list = pl_to_vl(point_list)
 
         X_path = []
         Y_path = []
-        x_ses = []
+        T = []
         heights = []
         i = 0
         for vert in vertex_list:
             tmp_pt = find_point_rel(facts, int(vert[0]), int(vert[1]))
-            x_ses.append(i)
+            T.append(i)
             i += 1
             heights.append(tmp_pt.height)
             X_path.append(tmp_pt.x)
             Y_path.append(tmp_pt.y)
 
         if plot_relative_grid:
-            fig, ax = plt.subplots()
-            ax.plot(x_ses, heights)
-            #res = ax.scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
-            #plt.colorbar(res, label="Height in m")
-            #ax.plot(*vertex_list.T)
-            #plt.axis('equal')
+            fig, ax = plt.subplots(2)
+            ax[0].scatter(T, heights)
+
+            xnew = np.linspace(T[0], T[-1], 300)
+            spl = make_interp_spline(T, heights, k=3)
+            heights_smooth = spl(xnew)
+            ax[0].plot(xnew, heights_smooth)
+
+            res = ax[1].scatter(X, Y, c=c, cmap="terrain", vmin=-1000, vmax=4000)
+            ax[1].plot(*vertex_list.T)
+            ax[1].set(ylim=(-20, 20))
+            plt.colorbar(res, label="Height in m")
+            plt.axis('scaled')
             plt.show()
 
         gmap.apikey = apiKey
